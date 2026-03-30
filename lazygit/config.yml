@@ -1,0 +1,12 @@
+gui:
+  showIcons: true
+  nerdFontsVersion: "3"
+  theme:
+    activeBorderColor:
+      - "#89b4fa"
+      - bold
+    inactiveBorderColor:
+      - "#45475a"
+git:
+  paging:
+    pager: "delta --dark --paging=never"

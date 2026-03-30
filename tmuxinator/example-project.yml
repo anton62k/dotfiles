@@ -1,0 +1,23 @@
+# Launch: tmuxinator start example-project
+# Stop:   tmuxinator stop example-project
+
+name: example-project
+root: ~/projects/example
+
+windows:
+  - code:
+      layout: main-vertical
+      panes:
+        - nvim .
+        - lazygit
+
+  - services:
+      layout: even-vertical
+      panes:
+        - npm run dev
+        - npm run api
+        - docker compose logs -f
+
+  - shell:
+      panes:
+        -
