@@ -118,7 +118,7 @@ Creates a tmux session with pre-configured windows and panes — editor, lazygit
 ### Quick start
 
 ```bash
-git clone https://github.com/antin62k/dotfiles.git ~/projects/dotfiles
+git clone https://github.com/anton62k/dotfiles.git ~/projects/dotfiles
 cd ~/projects/dotfiles
 ./install.sh
 ```
