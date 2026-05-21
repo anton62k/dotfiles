@@ -54,6 +54,7 @@ dotfiles/
 GPU-accelerated terminal emulator, native macOS app. Key config choices:
 - **Catppuccin Mocha** theme — easy on the eyes for long sessions
 - **JetBrainsMono Nerd Font** — ligatures + icons for file tree and status bars
+- **Transparent macOS titlebar** — avoids top-edge clipping from the hidden titlebar mode
 - **Option as Alt** — required for tmux keybindings on macOS
 - **Native tabs/splits disabled** — tmux handles this instead
 
@@ -65,7 +66,8 @@ Terminal multiplexer. Key config choices:
 - **Shift+arrows** for window switching — fast tab-like navigation
 - **Mouse enabled** — scroll, resize, click support
 - **resurrect + continuum** — auto-save sessions every 15 min, restore after reboot
-- **Catppuccin-matching status bar** — consistent look across all tools
+- **Top Catppuccin-matching status bar** — session and kubectl context stay visible above panes
+- **Ghostty capability hints** — truecolor and passthrough support inside tmux
 
 ### Neovim
 
@@ -214,9 +216,20 @@ gh auth login
 | `Ctrl+A ,` | Rename window |
 | `Ctrl+A d` | Detach (everything keeps running) |
 | `Ctrl+A s` | List sessions |
+| `Ctrl+A $` | Rename current session |
 | `Ctrl+A x` | Close pane |
 | `Ctrl+A Ctrl+S` | Save session |
 | `Ctrl+A Ctrl+R` | Restore session |
+
+Create or rename sessions from shell:
+
+```bash
+tmux new -s revisium
+tmux rename-session revisium-core
+tmux rename-session -t old-name new-name
+```
+
+The left side of the tmux status bar shows the current session name.
 
 ### Neovim (leader = Space)
 
