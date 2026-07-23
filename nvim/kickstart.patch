@@ -1,0 +1,89 @@
+diff --git a/init.lua b/init.lua
+index ed50b69..0bf0c28 100644
+--- a/init.lua
++++ b/init.lua
+@@ -91,13 +91,19 @@ vim.g.mapleader = ' '
+ vim.g.maplocalleader = ' '
+ 
+ -- Set to true if you have a Nerd Font installed and selected in the terminal
+-vim.g.have_nerd_font = false
++vim.g.have_nerd_font = true
+ 
+ -- [[ Setting options ]]
+ -- See `:help vim.o`
+ -- NOTE: You can change these options as you wish!
+ --  For more options, you can see `:help option-list`
+ 
++-- Auto-detect changes made by agents and other external processes.
++vim.o.autoread = true
++vim.api.nvim_create_autocmd({ 'FocusGained', 'BufEnter', 'CursorHold' }, {
++  command = 'silent! checktime',
++})
++
+ -- Make line numbers default
+ vim.o.number = true
+ -- You can also add relative line numbers, to help with jumping.
+@@ -609,7 +615,16 @@ require('lazy').setup({
+         --    https://github.com/pmizio/typescript-tools.nvim
+         --
+         -- But for many setups, the LSP (`ts_ls`) will work just fine
+-        -- ts_ls = {},
++        ts_ls = {},
++        eslint = {},
++        tailwindcss = {},
++        cssls = {},
++        html = {},
++        jsonls = {},
++        yamlls = {},
++        emmet_language_server = {},
++        dockerls = {},
++        docker_compose_language_service = {},
+ 
+         stylua = {}, -- Used to format Lua code
+ 
+@@ -696,11 +711,16 @@ require('lazy').setup({
+       end,
+       formatters_by_ft = {
+         lua = { 'stylua' },
+-        -- Conform can also run multiple formatters sequentially
+-        -- python = { "isort", "black" },
+-        --
+-        -- You can use 'stop_after_first' to run the first available formatter from the list
+-        -- javascript = { "prettierd", "prettier", stop_after_first = true },
++        javascript = { 'prettier' },
++        typescript = { 'prettier' },
++        javascriptreact = { 'prettier' },
++        typescriptreact = { 'prettier' },
++        css = { 'prettier' },
++        scss = { 'prettier' },
++        html = { 'prettier' },
++        json = { 'prettier' },
++        yaml = { 'prettier' },
++        markdown = { 'prettier' },
+       },
+     },
+   },
+@@ -910,17 +930,17 @@ require('lazy').setup({
+   --  Uncomment any of the lines below to enable them (you will need to restart nvim).
+   --
+   -- require 'kickstart.plugins.debug',
+-  -- require 'kickstart.plugins.indent_line',
+-  -- require 'kickstart.plugins.lint',
+-  -- require 'kickstart.plugins.autopairs',
+-  -- require 'kickstart.plugins.neo-tree',
+-  -- require 'kickstart.plugins.gitsigns', -- adds gitsigns recommended keymaps
++  require 'kickstart.plugins.indent_line',
++  require 'kickstart.plugins.lint',
++  require 'kickstart.plugins.autopairs',
++  require 'kickstart.plugins.neo-tree',
++  require 'kickstart.plugins.gitsigns', -- adds gitsigns recommended keymaps
+ 
+   -- NOTE: The import below can automatically add your own plugins, configuration, etc from `lua/custom/plugins/*.lua`
+   --    This is the easiest way to modularize your config.
+   --
+   --  Uncomment the following line and add your plugins to `lua/custom/plugins/*.lua` to get going.
+-  -- { import = 'custom.plugins' },
++  { import = 'custom.plugins' },
+   --
+   -- For additional information with loading, sourcing and examples see `:help lazy.nvim-🔌-plugin-spec`
+   -- Or use telescope!

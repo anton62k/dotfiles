@@ -1,0 +1,60 @@
+---
+# Host identity comes from the ignored inventory.yml.
+dev_home: "/home/{{ dev_user }}"
+dev_user_shell: /bin/bash
+dev_user_public_key_file: "{{ lookup('env', 'HOME') }}/.ssh/id_ed25519.pub"
+
+# Network/security defaults.
+ssh_port: 22
+mosh_enabled: true
+mosh_port_range: "60000:60010"
+monitoring_rules: []
+
+# Optional controller-local Git profile configuration.
+git_profiles_file: >-
+  {{ lookup('ansible.builtin.env', 'GIT_PROFILES_FILE', default='') }}
+git_ssh_server_id: >-
+  {{ lookup('ansible.builtin.env', 'GIT_SSH_SERVER_ID', default='') }}
+git_ssh_key_title_prefix: >-
+  {{ lookup('ansible.builtin.env', 'GIT_SSH_KEY_TITLE_PREFIX', default='dotfiles') }}
+git_ssh_rotation_reminder_days: 365
+
+# Pinned userland versions. Update intentionally and test on a clean VM.
+nvm_version: v0.40.6
+node_version: 24.18.0
+neovim_version: 0.11.6
+lazygit_version: 0.63.1
+kickstart_version: 0619d89884dec2fa911430fdc42796420421fd6b
+
+neovim_checksums:
+  x86_64: 2fc90b962327f73a78afbfb8203fd19db8db9cdf4ee5e2bef84704339add89cc
+  aarch64: 8ddc0c101846145e830b17bbca50782ca9307eee4fab539d9e2ddaf8793c06f1
+
+lazygit_checksums:
+  x86_64: 8e033bc78c8e192dee9510e951f6c9e154289b7198d22c924ed1d0a951b0dac1
+  aarch64: 555dbc9a8efcf2e33bc24e7fbd9463e9fa375e3c5e23cc270763733c38eeae36
+
+global_npm_packages:
+  - name: tree-sitter-cli
+    version: 0.26.11
+  - name: "@anthropic-ai/claude-code"
+    version: 2.1.215
+
+tmux_plugins:
+  - name: tpm
+    repo: https://github.com/tmux-plugins/tpm.git
+    version: e261deb1b47614eed3400089ce7197dc68acc4eb
+  - name: tmux-resurrect
+    repo: https://github.com/tmux-plugins/tmux-resurrect.git
+    version: cff343cf9e81983d3da0c8562b01616f12e8d548
+  - name: tmux-continuum
+    repo: https://github.com/tmux-plugins/tmux-continuum.git
+    version: 0698e8f4b17d6454c71bf5212895ec055c578da0
+
+docker_daemon_config:
+  ip: 127.0.0.1
+  live-restore: true
+  log-driver: json-file
+  log-opts:
+    max-size: 20m
+    max-file: "3"

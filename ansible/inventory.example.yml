@@ -1,0 +1,19 @@
+---
+dev_servers:
+  hosts:
+    dev-server:
+      ansible_host: server.example.com
+
+  vars:
+    # Keep real hostnames, usernames, key paths, and provider-specific rules in
+    # the ignored inventory.yml, not in this repository.
+    dev_user: developer
+    dev_user_public_key_file: "{{ lookup('env', 'HOME') }}/.ssh/id_ed25519.pub"
+
+    # Optional example for a provider monitoring agent:
+    # monitoring_rules:
+    #   - from_ip: 192.0.2.10
+    #     port: "10050"
+    #     proto: tcp
+    #     comment: Provider monitoring
+    monitoring_rules: []

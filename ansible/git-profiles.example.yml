@@ -1,0 +1,40 @@
+---
+git_default_profile:
+  id: default
+  user_name: Default User
+  user_email: default@example.com
+  ssh:
+    host: github.com
+    user: git
+    registration:
+      provider: github
+      hostname: github.com
+      api_url: https://api.github.com
+      account_env: GIT_SSH_ACCOUNT_DEFAULT
+
+git_profiles:
+  - id: profile_one
+    directory: /home/developer/projects/example-one/
+    user_name: Example User
+    user_email: user@example.com
+    ssh:
+      host: github.com
+      user: git
+      registration:
+        provider: github
+        hostname: github.com
+        api_url: https://api.github.com
+        account_env: GIT_SSH_ACCOUNT_PROFILE_ONE
+
+  - id: profile_two
+    directory: /home/developer/projects/example-two/
+    user_name: Another User
+    user_email: another@example.com
+    ssh:
+      host: github.com
+      user: git
+      registration:
+        provider: github
+        hostname: github.com
+        api_url: https://api.github.com
+        account_env: GIT_SSH_ACCOUNT_PROFILE_TWO

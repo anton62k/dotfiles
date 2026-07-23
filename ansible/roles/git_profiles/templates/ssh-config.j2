@@ -1,0 +1,10 @@
+{% for profile in git_profiles_ssh_profiles %}
+Host git-profile-{{ profile.id }}
+    HostName {{ profile.ssh.host }}
+    User {{ profile.ssh.user }}
+    IdentityFile {{ dev_home }}/.ssh/git-profile-{{ profile.id }}
+    IdentitiesOnly yes
+{% if not loop.last %}
+
+{% endif %}
+{% endfor %}

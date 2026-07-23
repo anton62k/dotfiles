@@ -1,0 +1,21 @@
+# Local Ansible targets and credentials. Only example files are public.
+ansible/inventory*.yml
+!ansible/inventory.example.yml
+ansible/inventory/
+ansible/host_vars/
+ansible/group_vars/local.yml
+ansible/local/
+ansible/*.retry
+ansible/*.log
+ansible/.env*
+!ansible/.env.example
+ansible/.vault-password*
+ansible/.collections/
+ansible/.venv/
+ansible/.ansible/
+ansible/**/*.key
+ansible/**/*.pem
+
+# Local operating system and editor files.
+.DS_Store
+*.swp

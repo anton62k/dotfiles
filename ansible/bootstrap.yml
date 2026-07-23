@@ -1,0 +1,31 @@
+---
+- name: Bootstrap access and secure a new Ubuntu server
+  hosts: dev_servers
+  become: true
+  gather_facts: true
+
+  pre_tasks:
+    - name: Require an Ubuntu host
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['distribution'] == 'Ubuntu'
+          - dev_user is defined
+          - (dev_user | default('root')) != 'root'
+        fail_msg: This bootstrap currently supports Ubuntu and a non-root development user.
+
+    - name: Check the public key on the controller
+      ansible.builtin.stat:
+        path: "{{ dev_user_public_key_file }}"
+      delegate_to: localhost
+      become: false
+      register: dev_public_key
+
+    - name: Require a readable SSH public key
+      ansible.builtin.assert:
+        that:
+          - dev_public_key.stat.exists
+          - dev_public_key.stat.isreg
+        fail_msg: "Set dev_user_public_key_file in the ignored inventory.yml. Never use a private key here."
+
+  roles:
+    - bootstrap

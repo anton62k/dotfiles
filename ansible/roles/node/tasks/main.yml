@@ -1,0 +1,76 @@
+---
+- name: Install pinned NVM
+  ansible.builtin.git:
+    repo: https://github.com/nvm-sh/nvm.git
+    dest: "{{ dev_home }}/.nvm"
+    version: "{{ nvm_version }}"
+    update: true
+  become: true
+  become_user: "{{ dev_user }}"
+  environment:
+    HOME: "{{ dev_home }}"
+
+- name: Load NVM before Ubuntu's non-interactive shell guard
+  ansible.builtin.blockinfile:
+    path: "{{ dev_home }}/.bashrc"
+    insertbefore: BOF
+    marker: "# {mark} DOTFILES NVM"
+    block: |
+      export NVM_DIR="$HOME/.nvm"
+      if [ -s "$NVM_DIR/nvm.sh" ]; then
+        . "$NVM_DIR/nvm.sh"
+      fi
+    owner: "{{ dev_user }}"
+    group: "{{ dev_user }}"
+    mode: "0644"
+
+- name: Install pinned Node.js
+  ansible.builtin.command:
+    argv:
+      - /bin/bash
+      - -lc
+      - '. "$NVM_DIR/nvm.sh" && nvm install "{{ node_version }}"'
+    creates: "{{ dev_home }}/.nvm/versions/node/v{{ node_version }}/bin/node"
+  become: true
+  become_user: "{{ dev_user }}"
+  environment:
+    HOME: "{{ dev_home }}"
+    NVM_DIR: "{{ dev_home }}/.nvm"
+
+- name: Create the NVM alias directory
+  ansible.builtin.file:
+    path: "{{ dev_home }}/.nvm/alias"
+    state: directory
+    owner: "{{ dev_user }}"
+    group: "{{ dev_user }}"
+    mode: "0755"
+
+- name: Set the default Node.js version
+  ansible.builtin.copy:
+    dest: "{{ dev_home }}/.nvm/alias/default"
+    content: "{{ node_version }}\n"
+    owner: "{{ dev_user }}"
+    group: "{{ dev_user }}"
+    mode: "0644"
+
+- name: Install pinned global npm tools when missing
+  ansible.builtin.shell: |
+    set -o pipefail
+    . "$NVM_DIR/nvm.sh"
+    package={{ (item.name ~ '@' ~ item.version) | quote }}
+    if npm list --global --depth=0 "$package" >/dev/null 2>&1; then
+      echo present
+    else
+      npm install --global "$package"
+      echo installed
+    fi
+  args:
+    executable: /bin/bash
+  loop: "{{ global_npm_packages }}"
+  become: true
+  become_user: "{{ dev_user }}"
+  environment:
+    HOME: "{{ dev_home }}"
+    NVM_DIR: "{{ dev_home }}/.nvm"
+  register: node_global_npm_result
+  changed_when: "'installed' in node_global_npm_result.stdout_lines"

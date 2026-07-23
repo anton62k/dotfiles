@@ -1,0 +1,156 @@
+---
+- name: Validate SSH configuration
+  ansible.builtin.command: /usr/sbin/sshd -t
+  check_mode: false
+  changed_when: false
+
+- name: Read effective SSH configuration
+  ansible.builtin.command: /usr/sbin/sshd -T
+  register: verify_sshd_effective
+  check_mode: false
+  changed_when: false
+
+- name: Check firewall status
+  ansible.builtin.command: ufw status
+  register: verify_ufw_status
+  check_mode: false
+  changed_when: false
+
+- name: Check Docker service
+  ansible.builtin.systemd_service:
+    name: docker
+  register: verify_docker_status
+  check_mode: false
+  changed_when: false
+
+- name: Check Node.js from a non-interactive user shell
+  ansible.builtin.command:
+    argv:
+      - /bin/bash
+      - -c
+      - '. ~/.bashrc && node --version'
+  become: true
+  become_user: "{{ dev_user }}"
+  environment:
+    HOME: "{{ dev_home }}"
+  register: verify_node_status
+  check_mode: false
+  changed_when: false
+
+- name: Check Neovim version
+  ansible.builtin.command: /usr/local/bin/nvim --version
+  register: verify_neovim_status
+  check_mode: false
+  changed_when: false
+
+- name: Check lazygit version
+  ansible.builtin.command: /usr/local/bin/lazygit --version
+  register: verify_lazygit_status
+  check_mode: false
+  changed_when: false
+
+- name: Read managed Git profile identities
+  ansible.builtin.command:
+    argv:
+      - git
+      - config
+      - --file
+      - "{{ dev_home }}/.gitconfig-{{ item.id }}"
+      - --get
+      - user.email
+  become: true
+  become_user: "{{ dev_user }}"
+  environment:
+    HOME: "{{ dev_home }}"
+  loop: "{{ git_profiles_directory_profiles | default([]) }}"
+  loop_control:
+    label: "{{ item.id }}"
+  register: verify_git_profile_identity_check
+  check_mode: false
+  changed_when: false
+  failed_when: verify_git_profile_identity_check.stdout != item.user_email
+
+- name: Read the managed default Git identity
+  ansible.builtin.command:
+    argv:
+      - git
+      - config
+      - --file
+      - "{{ dev_home }}/.gitconfig-dotfiles"
+      - --get
+      - user.email
+  become: true
+  become_user: "{{ dev_user }}"
+  environment:
+    HOME: "{{ dev_home }}"
+  register: verify_git_default_identity_check
+  check_mode: false
+  changed_when: false
+  failed_when: >-
+    verify_git_default_identity_check.stdout
+    != git_profiles_default_profile.user_email
+  when: git_profiles_default_profile | default({}) | length > 0
+
+- name: Read the managed default Git SSH command
+  ansible.builtin.command:
+    argv:
+      - git
+      - config
+      - --file
+      - "{{ dev_home }}/.gitconfig-dotfiles"
+      - --get
+      - core.sshCommand
+  become: true
+  become_user: "{{ dev_user }}"
+  environment:
+    HOME: "{{ dev_home }}"
+  register: verify_git_default_ssh_check
+  check_mode: false
+  changed_when: false
+  failed_when: >-
+    verify_git_default_ssh_check.stdout
+    !=
+    (
+      'ssh -i '
+      + dev_home
+      + '/.ssh/git-profile-'
+      + git_profiles_default_profile.id
+      + ' -o IdentitiesOnly=yes'
+    )
+  when:
+    - git_profiles_default_profile | default({}) | length > 0
+    - git_profiles_default_profile.ssh is defined
+
+- name: Read managed Git SSH aliases
+  ansible.builtin.command:
+    argv:
+      - ssh
+      - -G
+      - "git-profile-{{ item.id }}"
+  become: true
+  become_user: "{{ dev_user }}"
+  environment:
+    HOME: "{{ dev_home }}"
+  loop: "{{ git_profiles_ssh_profiles | default([]) }}"
+  loop_control:
+    label: "{{ item.id }}"
+  register: verify_git_profile_ssh_check
+  check_mode: false
+  changed_when: false
+  failed_when: >-
+    ('identityfile ' + dev_home + '/.ssh/git-profile-' + item.id)
+    not in verify_git_profile_ssh_check.stdout
+
+- name: Verify the security and toolchain baseline
+  ansible.builtin.assert:
+    that:
+      - "'permitrootlogin no' in verify_sshd_effective.stdout"
+      - "'passwordauthentication no' in verify_sshd_effective.stdout"
+      - >-
+        'kbdinteractiveauthentication no' in verify_sshd_effective.stdout
+      - "'Status: active' in verify_ufw_status.stdout"
+      - verify_docker_status.status.ActiveState == 'active'
+      - verify_node_status.stdout == 'v' + node_version
+      - "('NVIM v' + neovim_version) in verify_neovim_status.stdout"
+      - "('version=' + lazygit_version) in verify_lazygit_status.stdout"
+    fail_msg: The server does not match the expected security or toolchain baseline.

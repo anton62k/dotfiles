@@ -1,0 +1,102 @@
+---
+- name: Install access and security packages
+  ansible.builtin.apt:
+    name:
+      - openssh-server
+      - sudo
+      - ufw
+      - unattended-upgrades
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create the development user
+  ansible.builtin.user:
+    name: "{{ dev_user }}"
+    home: "{{ dev_home }}"
+    shell: "{{ dev_user_shell }}"
+    groups: sudo
+    append: true
+    create_home: true
+
+- name: Install the development user's SSH public key
+  ansible.posix.authorized_key:
+    user: "{{ dev_user }}"
+    key: "{{ lookup('file', dev_user_public_key_file) }}"
+    state: present
+    exclusive: false
+
+- name: Allow passwordless sudo for automation
+  ansible.builtin.copy:
+    dest: "/etc/sudoers.d/90-{{ dev_user }}"
+    content: "{{ dev_user }} ALL=(ALL:ALL) NOPASSWD: ALL\n"
+    owner: root
+    group: root
+    mode: "0440"
+    validate: /usr/sbin/visudo -cf %s
+
+- name: Enable unattended package upgrades
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Enable the unattended-upgrades service
+  ansible.builtin.service:
+    name: unattended-upgrades
+    enabled: true
+    state: started
+
+- name: Deny incoming traffic by default
+  community.general.ufw:
+    direction: incoming
+    policy: deny
+
+- name: Allow outgoing traffic by default
+  community.general.ufw:
+    direction: outgoing
+    policy: allow
+
+- name: Rate-limit SSH connections
+  community.general.ufw:
+    rule: limit
+    port: "{{ ssh_port }}"
+    proto: tcp
+    comment: SSH
+
+- name: Allow the configured Mosh port range
+  community.general.ufw:
+    rule: allow
+    port: "{{ mosh_port_range }}"
+    proto: udp
+    comment: Mosh
+  when: mosh_enabled | bool
+
+- name: Allow optional provider monitoring sources
+  community.general.ufw:
+    rule: allow
+    from_ip: "{{ item.from_ip }}"
+    port: "{{ item.port }}"
+    proto: "{{ item.proto | default('tcp') }}"
+    comment: "{{ item.comment | default('Monitoring') }}"
+  loop: "{{ monitoring_rules }}"
+  no_log: true
+
+- name: Enable the firewall
+  community.general.ufw:
+    state: enabled
+
+- name: Install SSH hardening after user access is ready
+  ansible.builtin.template:
+    src: sshd-hardening.conf.j2
+    dest: /etc/ssh/sshd_config.d/99-dev-server-hardening.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Validate SSH
+    - Reload SSH

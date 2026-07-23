@@ -1,0 +1,178 @@
+---
+- name: Create user configuration directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ dev_user }}"
+    group: "{{ dev_user }}"
+    mode: "0755"
+  loop:
+    - "{{ dev_home }}/.config/lazygit"
+    - "{{ dev_home }}/.config/tmuxinator"
+    - "{{ dev_home }}/.tmux/plugins"
+
+- name: Install tmux configuration
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../tmux/.tmux.conf"
+    dest: "{{ dev_home }}/.tmux.conf"
+    owner: "{{ dev_user }}"
+    group: "{{ dev_user }}"
+    mode: "0644"
+
+- name: Install lazygit configuration
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../lazygit/config.yml"
+    dest: "{{ dev_home }}/.config/lazygit/config.yml"
+    owner: "{{ dev_user }}"
+    group: "{{ dev_user }}"
+    mode: "0644"
+
+- name: Install generic tmuxinator layouts
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ dev_home }}/.config/tmuxinator/{{ item | basename }}"
+    owner: "{{ dev_user }}"
+    group: "{{ dev_user }}"
+    mode: "0644"
+  with_fileglob:
+    - "{{ playbook_dir }}/../tmuxinator/*.yml"
+
+- name: Install pinned tmux plugins
+  ansible.builtin.git:
+    repo: "{{ item.repo }}"
+    dest: "{{ dev_home }}/.tmux/plugins/{{ item.name }}"
+    version: "{{ item.version }}"
+    update: true
+  loop: "{{ tmux_plugins }}"
+  become: true
+  become_user: "{{ dev_user }}"
+  environment:
+    HOME: "{{ dev_home }}"
+
+- name: Install the pinned Kickstart base
+  ansible.builtin.git:
+    repo: https://github.com/nvim-lua/kickstart.nvim.git
+    dest: "{{ dev_home }}/.config/nvim"
+    version: "{{ kickstart_version }}"
+    update: false
+  become: true
+  become_user: "{{ dev_user }}"
+  environment:
+    HOME: "{{ dev_home }}"
+
+- name: Read the installed Kickstart revision
+  ansible.builtin.command:
+    argv:
+      - git
+      - rev-parse
+      - HEAD
+    chdir: "{{ dev_home }}/.config/nvim"
+  become: true
+  become_user: "{{ dev_user }}"
+  register: dotfiles_installed_kickstart_revision
+  check_mode: false
+  changed_when: false
+
+- name: Require the pinned Kickstart revision
+  ansible.builtin.assert:
+    that:
+      - dotfiles_installed_kickstart_revision.stdout == kickstart_version
+    fail_msg: >-
+      The existing Neovim checkout is based on a different Kickstart revision.
+      Back up local changes and align the checkout before applying dotfiles.
+
+- name: Copy the reproducible Kickstart patch
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../nvim/kickstart.patch"
+    dest: "{{ dev_home }}/.config/nvim/.dotfiles-kickstart.patch"
+    owner: "{{ dev_user }}"
+    group: "{{ dev_user }}"
+    mode: "0644"
+
+- name: Normalize a legacy autoread comment to English
+  ansible.builtin.replace:
+    path: "{{ dev_home }}/.config/nvim/init.lua"
+    regexp: '(?m)^-- [^\n]*\n(vim\.o\.autoread = true)$'
+    replace: |-
+      -- Auto-detect changes made by agents and other external processes.
+      \1
+
+- name: Check whether the Kickstart patch is already applied
+  ansible.builtin.command:
+    argv:
+      - git
+      - apply
+      - --reverse
+      - --check
+      - .dotfiles-kickstart.patch
+    chdir: "{{ dev_home }}/.config/nvim"
+  become: true
+  become_user: "{{ dev_user }}"
+  register: dotfiles_kickstart_patch_check
+  check_mode: false
+  changed_when: false
+  failed_when: false
+
+- name: Apply the Kickstart patch
+  ansible.builtin.command:
+    argv:
+      - git
+      - apply
+      - .dotfiles-kickstart.patch
+    chdir: "{{ dev_home }}/.config/nvim"
+  become: true
+  become_user: "{{ dev_user }}"
+  changed_when: true
+  when: dotfiles_kickstart_patch_check.rc != 0
+
+- name: Install Neovim custom configuration
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../nvim/{{ item }}"
+    dest: "{{ dev_home }}/.config/nvim/{{ item }}"
+    owner: "{{ dev_user }}"
+    group: "{{ dev_user }}"
+    mode: "0644"
+  loop:
+    - lua/custom/plugins/init.lua
+    - lua/kickstart/plugins/neo-tree.lua
+    - lua/kickstart/plugins/lint.lua
+    - lazy-lock.json
+
+- name: Restore pinned Neovim plugins
+  ansible.builtin.command:
+    argv:
+      - /usr/local/bin/nvim
+      - --headless
+      - "+Lazy! restore"
+      - +qa
+  become: true
+  become_user: "{{ dev_user }}"
+  environment:
+    HOME: "{{ dev_home }}"
+  changed_when: false
+
+- name: Install configured Mason tools
+  ansible.builtin.command:
+    argv:
+      - /usr/local/bin/nvim
+      - --headless
+      - +MasonToolsInstallSync
+      - +qa
+  become: true
+  become_user: "{{ dev_user }}"
+  environment:
+    HOME: "{{ dev_home }}"
+  changed_when: false
+
+- name: Install JavaScript and container Tree-sitter parsers
+  ansible.builtin.command:
+    argv:
+      - /usr/local/bin/nvim
+      - --headless
+      - "+lua require('nvim-treesitter').install({ 'typescript', 'tsx', 'javascript', 'json', 'css', 'scss', 'yaml', 'dockerfile' }):wait(300000)"
+      - +qa
+  become: true
+  become_user: "{{ dev_user }}"
+  environment:
+    HOME: "{{ dev_home }}"
+  changed_when: false

@@ -1,0 +1,64 @@
+---
+- name: Install Docker repository prerequisites
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+    state: present
+
+- name: Install the Docker repository key
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Configure the Docker repository
+  ansible.builtin.deb822_repository:
+    name: docker
+    types:
+      - deb
+    uris: https://download.docker.com/linux/ubuntu
+    suites:
+      - "{{ ansible_facts['distribution_release'] }}"
+    components:
+      - stable
+    signed_by: /etc/apt/keyrings/docker.asc
+    state: present
+
+- name: Install Docker Engine and Compose
+  ansible.builtin.apt:
+    name:
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-ce
+      - docker-ce-cli
+      - docker-compose-plugin
+    state: present
+    update_cache: true
+
+- name: Configure safe Docker defaults
+  ansible.builtin.copy:
+    dest: /etc/docker/daemon.json
+    content: "{{ docker_daemon_config | to_nice_json(indent=2, sort_keys=false) }}\n"
+    owner: root
+    group: root
+    mode: "0644"
+    validate: /usr/bin/dockerd --validate --config-file=%s
+  notify: Restart Docker
+
+- name: Add the development user to the Docker group
+  ansible.builtin.user:
+    name: "{{ dev_user }}"
+    groups: docker
+    append: true
+
+- name: Enable Docker
+  ansible.builtin.service:
+    name: docker
+    enabled: true
+    state: started
+
+- name: Apply Docker configuration changes
+  ansible.builtin.meta: flush_handlers

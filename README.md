@@ -1,6 +1,7 @@
 # Dotfiles
 
-Personal development environment configuration for macOS, optimized for a **TypeScript/JavaScript** stack (React, NestJS, Vite).
+Personal development environment configuration for macOS and remote Ubuntu
+servers, optimized for a **TypeScript/JavaScript** stack (React, NestJS, Vite).
 
 This is a terminal-first setup that replaces traditional IDEs like WebStorm with a lightweight, fast, and fully keyboard-driven workflow.
 
@@ -34,6 +35,7 @@ This setup is **faster** (GPU rendering, instant startup), **lighter** (fraction
 
 ```
 dotfiles/
+├── ansible/                               # Reproducible Ubuntu server bootstrap
 ├── ghostty/config                         # Ghostty terminal config
 ├── tmux/.tmux.conf                        # tmux config with plugins
 ├── nvim/
@@ -46,6 +48,10 @@ dotfiles/
 ├── tmuxinator/example-project.yml         # Example project layout template
 └── install.sh                             # Installation script
 ```
+
+The existing `install.sh` is for macOS. For a remote Ubuntu server, use the
+[Ansible bootstrap](ansible/README.md). Its committed files contain no server
+addresses, private keys, credentials, or project-specific configuration.
 
 ## Stack details
 
