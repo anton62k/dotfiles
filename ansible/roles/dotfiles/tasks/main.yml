@@ -113,6 +113,20 @@
   changed_when: false
   failed_when: false
 
+- name: Restore the pinned Kickstart init before updating its managed patch
+  ansible.builtin.command:
+    argv:
+      - git
+      - restore
+      - --source=HEAD
+      - --
+      - init.lua
+    chdir: "{{ dev_home }}/.config/nvim"
+  become: true
+  become_user: "{{ dev_user }}"
+  changed_when: true
+  when: dotfiles_kickstart_patch_check.rc != 0
+
 - name: Apply the Kickstart patch
   ansible.builtin.command:
     argv:
@@ -137,6 +151,52 @@
     - lua/kickstart/plugins/neo-tree.lua
     - lua/kickstart/plugins/lint.lua
     - lazy-lock.json
+
+- name: Read the lazy.nvim version from the lockfile
+  ansible.builtin.set_fact:
+    dotfiles_lazy_nvim_lock_version: >-
+      {{
+        (
+          lookup(
+            'ansible.builtin.file',
+            playbook_dir + '/../nvim/lazy-lock.json'
+          )
+          | from_json
+        )['lazy.nvim'].commit
+      }}
+
+- name: Require consistent lazy.nvim pins
+  ansible.builtin.assert:
+    that:
+      - dotfiles_lazy_nvim_lock_version == lazy_nvim_version
+      - >-
+        lazy_nvim_version
+        in lookup(
+          'ansible.builtin.file',
+          playbook_dir + '/../nvim/kickstart.patch'
+        )
+    fail_msg: >-
+      Keep lazy_nvim_version, lazy-lock.json, and the Kickstart bootstrap patch
+      on the same commit.
+
+- name: Create the lazy.nvim plugin-manager directory
+  ansible.builtin.file:
+    path: "{{ dev_home }}/.local/share/nvim/lazy"
+    state: directory
+    owner: "{{ dev_user }}"
+    group: "{{ dev_user }}"
+    mode: "0755"
+
+- name: Install the pinned lazy.nvim plugin manager
+  ansible.builtin.git:
+    repo: https://github.com/folke/lazy.nvim.git
+    dest: "{{ dev_home }}/.local/share/nvim/lazy/lazy.nvim"
+    version: "{{ lazy_nvim_version }}"
+    update: true
+  become: true
+  become_user: "{{ dev_user }}"
+  environment:
+    HOME: "{{ dev_home }}"
 
 - name: Restore pinned Neovim plugins
   ansible.builtin.command:

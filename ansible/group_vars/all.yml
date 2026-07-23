@@ -3,6 +3,7 @@
 dev_home: "/home/{{ dev_user }}"
 dev_user_shell: /bin/bash
 dev_user_public_key_file: "{{ lookup('env', 'HOME') }}/.ssh/id_ed25519.pub"
+dev_passwordless_sudo: false
 
 # Network/security defaults.
 ssh_port: 22
@@ -25,6 +26,7 @@ node_version: 24.18.0
 neovim_version: 0.11.6
 lazygit_version: 0.63.1
 kickstart_version: 0619d89884dec2fa911430fdc42796420421fd6b
+lazy_nvim_version: 306a05526ada86a7b30af95c5cc81ffba93fef97
 
 neovim_checksums:
   x86_64: 2fc90b962327f73a78afbfb8203fd19db8db9cdf4ee5e2bef84704339add89cc

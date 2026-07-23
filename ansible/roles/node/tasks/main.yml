@@ -55,7 +55,7 @@
 
 - name: Install pinned global npm tools when missing
   ansible.builtin.shell: |
-    set -o pipefail
+    set -euo pipefail
     . "$NVM_DIR/nvm.sh"
     package={{ (item.name ~ '@' ~ item.version) | quote }}
     if npm list --global --depth=0 "$package" >/dev/null 2>&1; then

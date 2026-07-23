@@ -70,6 +70,7 @@ ansible/local/git-profiles.yml
 
 Controller:
 
+- macOS with Homebrew;
 - OpenSSH and a verified connection to the target;
 - `uv` for the isolated Python environment;
 - `gh` only when GitHub SSH keys should be registered automatically.
@@ -82,12 +83,13 @@ Target:
 
 ## Controller setup
 
-Run Ansible from the MacBook (or another trusted controller):
+Run Ansible from a trusted macOS controller:
 
 ```bash
 brew install uv gh
 cd ansible
-uv venv .venv
+uv python install 3.13
+uv venv --python 3.13 .venv
 uv pip install --python .venv/bin/python -r requirements.txt
 .venv/bin/ansible-galaxy collection install -r requirements.yml -p .collections
 cp inventory.example.yml inventory.yml
@@ -98,8 +100,16 @@ chmod 600 .env inventory.yml local/git-profiles.yml
 ```
 
 Edit the ignored `inventory.yml` with the real hostname, desired user, public
-key path, and optional provider monitoring rules. Connect to the new host once
-with SSH first so its host key is recorded and verified.
+key path, SSH ports, sudo policy, and optional provider monitoring rules.
+Connect to the new host once with SSH first so its host key is recorded and
+verified.
+
+`dev_passwordless_sudo` defaults to `false`. Set it to `true` only for a
+dedicated single-user server that needs unattended Ansible and agent
+automation. This creates an unrestricted `NOPASSWD: ALL` rule, so compromise of
+the development account is equivalent to root compromise. When it remains
+disabled, keep using the provider administrator for `site.yml` or configure a
+passworded sudo workflow.
 
 Edit the ignored `.env` and `local/git-profiles.yml` only when the default or
 directory-scoped Git identities and SSH keys should be managed. The committed
@@ -139,11 +149,22 @@ sudo -n true
 If the provider gives a non-root sudo user instead, run `bootstrap.yml` as that
 user with `--become` access.
 
+For an SSH port migration, keep `ansible_port` at the currently reachable
+provider port and set `ssh_port` to the desired port. The bootstrap temporarily
+allows both ports, validates and reloads sshd, verifies the new port from the
+controller, enables UFW, and then removes the temporary old-port rule. Update
+`ansible_port` to the new value before the next playbook run.
+
 ## Development environment
+
+When `dev_passwordless_sudo: true`, connect as the development user:
 
 ```bash
 ./run-playbook.sh site.yml -u developer
 ```
+
+Otherwise, connect through the provider administrator with its normal
+passworded or provider-managed sudo access.
 
 Run it a second time after the first successful install. Normal configuration
 tasks should report no changes; verification commands always run read-only:
