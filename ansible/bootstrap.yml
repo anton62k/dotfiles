@@ -58,5 +58,18 @@
           never private key material.
       no_log: true
 
+    - name: Parse the SSH public key with ssh-keygen
+      ansible.builtin.command:
+        argv:
+          - ssh-keygen
+          - -l
+          - -f
+          - "{{ dev_user_public_key_file }}"
+      delegate_to: localhost
+      become: false
+      check_mode: false
+      changed_when: false
+      no_log: true
+
   roles:
     - bootstrap

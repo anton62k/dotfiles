@@ -1,5 +1,5 @@
 diff --git a/init.lua b/init.lua
-index ed50b69..0bf0c28 100644
+index ed50b69..6f73648 100644
 --- a/init.lua
 +++ b/init.lua
 @@ -91,13 +91,19 @@ vim.g.mapleader = ' '
@@ -23,9 +23,7 @@ index ed50b69..0bf0c28 100644
  -- Make line numbers default
  vim.o.number = true
  -- You can also add relative line numbers, to help with jumping.
-@@ -233,12 +239,16 @@ vim.api.nvim_create_autocmd('TextYankPost', {
- -- [[ Install `lazy.nvim` plugin manager ]]
- --    See `:help lazy.nvim.txt` or https://github.com/folke/lazy.nvim for more info
+@@ -235,7 +241,11 @@ vim.api.nvim_create_autocmd('TextYankPost', {
  local lazypath = vim.fn.stdpath 'data' .. '/lazy/lazy.nvim'
  if not (vim.uv or vim.loop).fs_stat(lazypath) then
    local lazyrepo = 'https://github.com/folke/lazy.nvim.git'
@@ -38,10 +36,7 @@ index ed50b69..0bf0c28 100644
    if vim.v.shell_error ~= 0 then error('Error cloning lazy.nvim:\n' .. out) end
  end
  
- ---@type vim.Option
- local rtp = vim.opt.rtp
- rtp:prepend(lazypath)
-@@ -609,7 +615,16 @@ require('lazy').setup({
+@@ -609,7 +619,16 @@ require('lazy').setup({
          --    https://github.com/pmizio/typescript-tools.nvim
          --
          -- But for many setups, the LSP (`ts_ls`) will work just fine
@@ -59,7 +54,7 @@ index ed50b69..0bf0c28 100644
  
          stylua = {}, -- Used to format Lua code
  
-@@ -696,11 +711,16 @@ require('lazy').setup({
+@@ -696,11 +715,16 @@ require('lazy').setup({
        end,
        formatters_by_ft = {
          lua = { 'stylua' },
@@ -81,7 +76,7 @@ index ed50b69..0bf0c28 100644
        },
      },
    },
-@@ -910,17 +930,17 @@ require('lazy').setup({
+@@ -910,17 +934,17 @@ require('lazy').setup({
    --  Uncomment any of the lines below to enable them (you will need to restart nvim).
    --
    -- require 'kickstart.plugins.debug',

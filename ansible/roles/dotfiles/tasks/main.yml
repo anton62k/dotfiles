@@ -81,6 +81,92 @@
       The existing Neovim checkout is based on a different Kickstart revision.
       Back up local changes and align the checkout before applying dotfiles.
 
+- name: Read the installed Kickstart patch metadata
+  ansible.builtin.stat:
+    path: "{{ dev_home }}/.config/nvim/.dotfiles-kickstart.patch"
+    checksum_algorithm: sha1
+  register: dotfiles_installed_patch
+
+- name: Read the repository Kickstart patch metadata
+  ansible.builtin.stat:
+    path: "{{ playbook_dir }}/../nvim/kickstart.patch"
+    checksum_algorithm: sha1
+  delegate_to: localhost
+  become: false
+  register: dotfiles_repository_patch
+
+- name: Decide whether the managed Kickstart patch needs an update
+  ansible.builtin.set_fact:
+    dotfiles_patch_update_required: >-
+      {{
+        not dotfiles_installed_patch.stat.exists
+        or
+        (
+          dotfiles_installed_patch.stat.checksum | default('')
+          != dotfiles_repository_patch.stat.checksum
+        )
+      }}
+
+- name: Read the current Kickstart init diff
+  ansible.builtin.command:
+    argv:
+      - git
+      - diff
+      - --no-ext-diff
+      - --
+      - init.lua
+    chdir: "{{ dev_home }}/.config/nvim"
+  become: true
+  become_user: "{{ dev_user }}"
+  register: dotfiles_current_init_diff
+  check_mode: false
+  changed_when: false
+
+- name: Read the installed Kickstart patch
+  ansible.builtin.slurp:
+    src: "{{ dev_home }}/.config/nvim/.dotfiles-kickstart.patch"
+  register: dotfiles_installed_patch_content
+  when: dotfiles_installed_patch.stat.exists
+
+- name: Refuse unmanaged Kickstart init changes
+  ansible.builtin.assert:
+    that:
+      - >-
+        (
+          not dotfiles_installed_patch.stat.exists
+          and (dotfiles_current_init_diff.stdout | trim | length == 0)
+        )
+        or
+        (
+          dotfiles_installed_patch.stat.exists
+          and
+          (
+            dotfiles_installed_patch_content.content
+            | b64decode
+            | trim
+          )
+          == (dotfiles_current_init_diff.stdout | trim)
+        )
+    fail_msg: >-
+      init.lua contains changes outside the installed managed patch. Back up
+      or revert those changes before updating the Kickstart configuration.
+
+- name: Remove the previous managed Kickstart patch before updating it
+  ansible.builtin.command:
+    argv:
+      - git
+      - apply
+      - --reverse
+      - .dotfiles-kickstart.patch
+    chdir: "{{ dev_home }}/.config/nvim"
+  become: true
+  become_user: "{{ dev_user }}"
+  changed_when: true
+  when:
+    - not ansible_check_mode
+    - dotfiles_patch_update_required | bool
+    - dotfiles_installed_patch.stat.exists
+
 - name: Copy the reproducible Kickstart patch
   ansible.builtin.copy:
     src: "{{ playbook_dir }}/../nvim/kickstart.patch"
@@ -88,44 +174,6 @@
     owner: "{{ dev_user }}"
     group: "{{ dev_user }}"
     mode: "0644"
-
-- name: Normalize a legacy autoread comment to English
-  ansible.builtin.replace:
-    path: "{{ dev_home }}/.config/nvim/init.lua"
-    regexp: '(?m)^-- [^\n]*\n(vim\.o\.autoread = true)$'
-    replace: |-
-      -- Auto-detect changes made by agents and other external processes.
-      \1
-
-- name: Check whether the Kickstart patch is already applied
-  ansible.builtin.command:
-    argv:
-      - git
-      - apply
-      - --reverse
-      - --check
-      - .dotfiles-kickstart.patch
-    chdir: "{{ dev_home }}/.config/nvim"
-  become: true
-  become_user: "{{ dev_user }}"
-  register: dotfiles_kickstart_patch_check
-  check_mode: false
-  changed_when: false
-  failed_when: false
-
-- name: Restore the pinned Kickstart init before updating its managed patch
-  ansible.builtin.command:
-    argv:
-      - git
-      - restore
-      - --source=HEAD
-      - --
-      - init.lua
-    chdir: "{{ dev_home }}/.config/nvim"
-  become: true
-  become_user: "{{ dev_user }}"
-  changed_when: true
-  when: dotfiles_kickstart_patch_check.rc != 0
 
 - name: Apply the Kickstart patch
   ansible.builtin.command:
@@ -137,7 +185,9 @@
   become: true
   become_user: "{{ dev_user }}"
   changed_when: true
-  when: dotfiles_kickstart_patch_check.rc != 0
+  when:
+    - not ansible_check_mode
+    - dotfiles_patch_update_required | bool
 
 - name: Install Neovim custom configuration
   ansible.builtin.copy:
