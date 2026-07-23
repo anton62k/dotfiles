@@ -122,6 +122,24 @@
   check_mode: false
   changed_when: false
 
+- name: Check for staged Kickstart init changes
+  ansible.builtin.command:
+    argv:
+      - git
+      - diff
+      - --cached
+      - --quiet
+      - --no-ext-diff
+      - --
+      - init.lua
+    chdir: "{{ dev_home }}/.config/nvim"
+  become: true
+  become_user: "{{ dev_user }}"
+  register: dotfiles_staged_init_diff
+  check_mode: false
+  changed_when: false
+  failed_when: dotfiles_staged_init_diff.rc not in [0, 1]
+
 - name: Read the installed Kickstart patch
   ansible.builtin.slurp:
     src: "{{ dev_home }}/.config/nvim/.dotfiles-kickstart.patch"
@@ -131,6 +149,7 @@
 - name: Refuse unmanaged Kickstart init changes
   ansible.builtin.assert:
     that:
+      - dotfiles_staged_init_diff.rc == 0
       - >-
         (
           not dotfiles_installed_patch.stat.exists
@@ -148,8 +167,9 @@
           == (dotfiles_current_init_diff.stdout | trim)
         )
     fail_msg: >-
-      init.lua contains changes outside the installed managed patch. Back up
-      or revert those changes before updating the Kickstart configuration.
+      init.lua contains staged changes or changes outside the installed
+      managed patch. Back up or revert those changes before updating the
+      Kickstart configuration.
 
 - name: Remove the previous managed Kickstart patch before updating it
   ansible.builtin.command:
