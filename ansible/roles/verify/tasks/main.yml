@@ -145,7 +145,7 @@
   ansible.builtin.assert:
     that:
       - "'permitrootlogin no' in verify_sshd_effective.stdout"
-      - "'passwordauthentication no' in verify_sshd_effective.stdout"
+      - "'passwordauthentication yes' in verify_sshd_effective.stdout"
       - >-
         'kbdinteractiveauthentication no' in verify_sshd_effective.stdout
       - "'Status: active' in verify_ufw_status.stdout"

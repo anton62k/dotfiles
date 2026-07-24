@@ -18,8 +18,9 @@ by the controller's `gh` CLI; those tokens are never copied to the server.
 
 ## What it manages
 
-- a non-root development user with passwordless sudo for automation;
-- public-key-only SSH access, root-login denial, UFW, and unattended upgrades;
+- a non-root development user with optional passwordless sudo for automation;
+- SSH public-key and password access for non-root users, root-login denial,
+  UFW, and unattended upgrades;
 - Docker Engine and Compose with bounded local logs;
 - pinned NVM, Node.js, Neovim, lazygit, tmux plugins, and npm tools;
 - Mosh, GitHub CLI, common shell utilities, and development packages;
@@ -138,8 +139,10 @@ On a fresh provider image where root SSH is initially available:
 ```
 
 The bootstrap creates the development user and installs its public key before
-disabling root/password SSH. Keep the current root terminal open and verify the
-new login in a second terminal before closing it:
+disabling root SSH. Password authentication remains enabled for non-root
+accounts, but the playbook does not create or store account passwords. Keep the
+current root terminal open and verify the new login in a second terminal before
+closing it:
 
 ```bash
 ssh developer@server.example.com
