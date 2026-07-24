@@ -23,6 +23,7 @@ by the controller's `gh` CLI; those tokens are never copied to the server.
   UFW, and unattended upgrades;
 - Docker Engine and Compose with bounded local logs;
 - pinned NVM, Node.js, Neovim, lazygit, tmux plugins, and npm tools;
+- pinned Codex CLI, Claude Code, OpenCode, and Tree-sitter CLI releases;
 - Mosh, GitHub CLI, common shell utilities, and development packages;
 - the tmux, lazygit, tmuxinator, and Neovim configuration in this repository;
 - optional account-aware Git identities and server-generated SSH keys;

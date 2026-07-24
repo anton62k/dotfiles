@@ -37,6 +37,26 @@
   check_mode: false
   changed_when: false
 
+- name: Check pinned global npm tools
+  ansible.builtin.command:
+    argv:
+      - /bin/bash
+      - -c
+      - '. ~/.bashrc && "$1" --version'
+      - global-npm-tool
+      - "{{ item.command }}"
+  become: true
+  become_user: "{{ dev_user }}"
+  environment:
+    HOME: "{{ dev_home }}"
+  loop: "{{ global_npm_packages }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: verify_global_npm_tools
+  check_mode: false
+  changed_when: false
+  failed_when: item.version not in verify_global_npm_tools.stdout
+
 - name: Check Neovim version
   ansible.builtin.command: /usr/local/bin/nvim --version
   register: verify_neovim_status

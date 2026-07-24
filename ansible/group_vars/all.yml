@@ -39,8 +39,16 @@ lazygit_checksums:
 global_npm_packages:
   - name: tree-sitter-cli
     version: 0.26.11
+    command: tree-sitter
   - name: "@anthropic-ai/claude-code"
     version: 2.1.215
+    command: claude
+  - name: "@openai/codex"
+    version: 0.145.0
+    command: codex
+  - name: opencode-ai
+    version: 1.18.4
+    command: opencode
 
 tmux_plugins:
   - name: tpm
