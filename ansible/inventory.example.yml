@@ -1,0 +1,25 @@
+---
+dev_servers:
+  hosts:
+    dev-server:
+      ansible_host: server.example.com
+      # Keep this at the provider's current port for the first bootstrap.
+      # After a successful port migration, update it to match ssh_port.
+      ansible_port: 22
+      # Host-specific values override the public defaults in group_vars/all.yml.
+      # Keep real values in the ignored inventory.yml.
+      dev_user: developer
+      dev_user_public_key_file: "{{ lookup('env', 'HOME') }}/.ssh/id_ed25519.pub"
+      ssh_port: 22
+
+      # NOPASSWD: ALL is equivalent to root access. Enable it explicitly only
+      # for a dedicated single-user server that needs unattended automation.
+      dev_passwordless_sudo: false
+
+      # Optional example for a provider monitoring agent:
+      # monitoring_rules:
+      #   - from_ip: 192.0.2.10
+      #     port: "10050"
+      #     proto: tcp
+      #     comment: Provider monitoring
+      monitoring_rules: []

@@ -1,0 +1,6 @@
+[user]
+    name = "{{ item.user_name | replace('\\', '\\\\') | replace('"', '\\"') }}"
+    email = "{{ item.user_email | replace('\\', '\\\\') | replace('"', '\\"') }}"
+
+[core]
+    sshCommand = ssh -i {{ dev_home }}/.ssh/git-profile-{{ item.id }} -o IdentitiesOnly=yes

@@ -1,0 +1,27 @@
+---
+- name: Configure the remote development server
+  hosts: dev_servers
+  become: true
+  gather_facts: true
+
+  pre_tasks:
+    - name: Require a supported Ubuntu architecture
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['distribution'] == 'Ubuntu'
+          - ansible_facts['architecture'] in ['x86_64', 'aarch64']
+          - dev_user is defined
+          - (dev_user | default('root')) != 'root'
+        fail_msg: "Run site.yml on Ubuntu x86_64 or arm64 with a non-root dev_user."
+
+  roles:
+    - common
+    - docker
+    - node
+    - role: git_profiles
+      tags:
+        - git_profiles
+    - dotfiles
+    - role: verify
+      tags:
+        - verify

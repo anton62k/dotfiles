@@ -1,0 +1,17 @@
+{% if git_profiles_default_profile %}
+[user]
+    name = "{{ git_profiles_default_profile.user_name | replace('\\', '\\\\') | replace('"', '\\"') }}"
+    email = "{{ git_profiles_default_profile.user_email | replace('\\', '\\\\') | replace('"', '\\"') }}"
+{% if git_profiles_default_profile.ssh is defined %}
+
+[core]
+    sshCommand = ssh -i {{ dev_home }}/.ssh/git-profile-{{ git_profiles_default_profile.id }} -o IdentitiesOnly=yes
+{% endif %}
+{% endif %}
+{% for profile in git_profiles_directory_profiles %}
+[includeIf "gitdir:{{ profile.directory }}"]
+    path = {{ dev_home }}/.gitconfig-{{ profile.id }}
+{% if not loop.last %}
+
+{% endif %}
+{% endfor %}

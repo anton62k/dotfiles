@@ -1,0 +1,307 @@
+---
+- name: Configure optional Git profiles
+  when: git_profiles_file | length > 0
+  block:
+    - name: Load controller-local Git profiles
+      ansible.builtin.include_vars:
+        file: "{{ git_profiles_file }}"
+        name: git_profile_config
+
+    - name: Select controller-local Git profile values
+      ansible.builtin.set_fact:
+        git_profiles_default_profile: "{{ git_profile_config.git_default_profile | default({}) }}"
+        git_profiles_directory_profiles: "{{ git_profile_config.git_profiles | default([]) }}"
+        git_profiles_ssh_profiles: >-
+          {{
+            (
+              [git_profile_config.git_default_profile]
+              if
+                git_profile_config.git_default_profile is defined
+                and git_profile_config.git_default_profile.ssh is defined
+              else []
+            )
+            + (git_profile_config.git_profiles | default([]))
+          }}
+
+    - name: Require a stable server identifier
+      ansible.builtin.assert:
+        that:
+          - git_ssh_server_id | length > 0
+          - git_ssh_server_id is match('^[A-Za-z0-9][A-Za-z0-9._-]*$')
+          - git_ssh_key_title_prefix is match('^[A-Za-z0-9][A-Za-z0-9._-]*$')
+        fail_msg: >-
+          Set a stable GIT_SSH_SERVER_ID and a safe
+          GIT_SSH_KEY_TITLE_PREFIX in the controller .env file.
+      when: git_profiles_ssh_profiles | length > 0
+
+    - name: Require unique Git profile identifiers
+      ansible.builtin.assert:
+        that:
+          - >-
+            (
+              git_profiles_ssh_profiles
+              | map(attribute='id')
+              | list
+              | unique
+              | length
+            )
+            == (git_profiles_ssh_profiles | length)
+        fail_msg: Git profile identifiers must be unique.
+
+    - name: Validate the default Git profile
+      ansible.builtin.assert:
+        that:
+          - git_profiles_default_profile.id is match('^[a-z0-9][a-z0-9_-]*$')
+          - git_profiles_default_profile.user_name | length > 0
+          - "'\n' not in git_profiles_default_profile.user_name"
+          - git_profiles_default_profile.user_email | length > 0
+          - "'\n' not in git_profiles_default_profile.user_email"
+          - >-
+            git_profiles_default_profile.ssh is not defined
+            or
+            (
+              git_profiles_default_profile.ssh.host
+                is match('^[A-Za-z0-9.-]+$')
+              and git_profiles_default_profile.ssh.user
+                is match('^[A-Za-z0-9._-]+$')
+              and (
+                (
+                  git_profiles_default_profile.ssh.registration | default({})
+                ).provider | default('manual')
+              ) in ['manual', 'github']
+            )
+          - >-
+            git_profiles_default_profile.ssh is not defined
+            or
+            (
+              (
+                git_profiles_default_profile.ssh.registration | default({})
+              ).provider | default('manual')
+            ) != 'github'
+            or
+            (
+              git_profiles_default_profile.ssh.registration.hostname
+                | length > 0
+              and git_profiles_default_profile.ssh.registration.api_url
+                is match('^https://')
+              and git_profiles_default_profile.ssh.registration.account_env
+                is match('^[A-Z][A-Z0-9_]*$')
+            )
+        fail_msg: The default Git profile is invalid.
+      when: git_profiles_default_profile | length > 0
+
+    - name: Validate directory-scoped Git profile definitions
+      ansible.builtin.assert:
+        that:
+          - item.id is match('^[a-z0-9][a-z0-9_-]*$')
+          - item.directory.startswith(dev_home + '/')
+          - item.directory.endswith('/')
+          - item.user_name | length > 0
+          - "'\n' not in item.user_name"
+          - item.user_email | length > 0
+          - "'\n' not in item.user_email"
+          - item.ssh.host is match('^[A-Za-z0-9.-]+$')
+          - item.ssh.user is match('^[A-Za-z0-9._-]+$')
+          - >-
+            ((item.ssh.registration | default({})).provider | default('manual'))
+            in ['manual', 'github']
+          - >-
+            (
+              (item.ssh.registration | default({})).provider
+              | default('manual')
+            ) != 'github'
+            or
+            (
+              item.ssh.registration.hostname | length > 0
+              and item.ssh.registration.api_url is match('^https://')
+              and item.ssh.registration.account_env
+                is match('^[A-Z][A-Z0-9_]*$')
+            )
+        fail_msg: "Git profile {{ item.id | default('unknown') }} is invalid."
+      loop: "{{ git_profiles_directory_profiles }}"
+      loop_control:
+        label: "{{ item.id | default('unknown') }}"
+
+    - name: Create the SSH configuration directory
+      ansible.builtin.file:
+        path: "{{ dev_home }}/.ssh/config.d"
+        state: directory
+        owner: "{{ dev_user }}"
+        group: "{{ dev_user }}"
+        mode: "0700"
+
+    - name: Generate Git profile SSH keypairs
+      community.crypto.openssh_keypair:
+        path: "{{ dev_home }}/.ssh/git-profile-{{ item.id }}"
+        type: ed25519
+        comment: >-
+          {{ git_ssh_key_title_prefix }}:{{ git_ssh_server_id }}:{{ item.id }}
+        regenerate: never
+        owner: "{{ dev_user }}"
+        group: "{{ dev_user }}"
+        mode: "0600"
+      loop: "{{ git_profiles_ssh_profiles }}"
+      loop_control:
+        label: "{{ item.id }}"
+
+    - name: Install the managed Git configuration
+      ansible.builtin.template:
+        src: gitconfig-managed.j2
+        dest: "{{ dev_home }}/.gitconfig-dotfiles"
+        owner: "{{ dev_user }}"
+        group: "{{ dev_user }}"
+        mode: "0644"
+
+    - name: Include the managed Git configuration
+      community.general.git_config:
+        name: include.path
+        value: "{{ dev_home }}/.gitconfig-dotfiles"
+        scope: global
+        state: present
+        add_mode: add
+      become: true
+      become_user: "{{ dev_user }}"
+      environment:
+        HOME: "{{ dev_home }}"
+
+    - name: Install profile-specific Git configurations
+      ansible.builtin.template:
+        src: gitconfig-profile.j2
+        dest: "{{ dev_home }}/.gitconfig-{{ item.id }}"
+        owner: "{{ dev_user }}"
+        group: "{{ dev_user }}"
+        mode: "0644"
+      loop: "{{ git_profiles_directory_profiles }}"
+      loop_control:
+        label: "{{ item.id }}"
+
+    - name: Install profile-specific SSH aliases
+      ansible.builtin.template:
+        src: ssh-config.j2
+        dest: "{{ dev_home }}/.ssh/config.d/dotfiles-git-profiles"
+        owner: "{{ dev_user }}"
+        group: "{{ dev_user }}"
+        mode: "0600"
+
+    - name: Include profile-specific SSH aliases
+      ansible.builtin.blockinfile:
+        path: "{{ dev_home }}/.ssh/config"
+        create: true
+        owner: "{{ dev_user }}"
+        group: "{{ dev_user }}"
+        mode: "0600"
+        insertbefore: BOF
+        marker: "# {mark} DOTFILES MANAGED GIT PROFILE INCLUDES"
+        block: Include ~/.ssh/config.d/dotfiles-git-profiles
+
+    - name: Read generated public SSH keys
+      ansible.builtin.slurp:
+        src: "{{ dev_home }}/.ssh/git-profile-{{ item.id }}.pub"
+      loop: "{{ git_profiles_ssh_profiles }}"
+      loop_control:
+        label: "{{ item.id }}"
+      register: git_profiles_public_keys
+      when: not ansible_check_mode
+
+    - name: Build Git SSH registration records
+      ansible.builtin.set_fact:
+        git_profiles_records: >-
+          {{
+            (git_profiles_records | default([]))
+            + [
+              item.item
+              | combine(
+                  {
+                    'public_key': item.content | b64decode | trim,
+                    'key_material':
+                      (
+                        (item.content | b64decode | trim).split()
+                      )[0:2]
+                      | join(' '),
+                    'key_title':
+                      git_ssh_key_title_prefix
+                      + ':'
+                      + git_ssh_server_id
+                      + ':'
+                      + item.item.id
+                  },
+                  recursive=True
+                )
+            ]
+          }}
+      loop: "{{ git_profiles_public_keys.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item.id }}"
+      when:
+        - not ansible_check_mode
+        - not item.skipped | default(false)
+
+    - name: Require a unique SSH key for every Git profile
+      ansible.builtin.assert:
+        that:
+          - >-
+            (
+              git_profiles_records
+              | map(attribute='key_material')
+              | list
+              | unique
+              | length
+            )
+            == (git_profiles_records | length)
+        fail_msg: Every Git profile must use a distinct SSH keypair.
+      when:
+        - not ansible_check_mode
+        - git_profiles_records | default([]) | length > 0
+
+    - name: Register profile SSH keys with GitHub
+      ansible.builtin.include_tasks: register_github.yml
+      loop: "{{ git_profiles_records | default([]) }}"
+      loop_control:
+        loop_var: git_profile_record
+        label: "{{ git_profile_record.id }}"
+      when:
+        - not ansible_check_mode
+        - >-
+          (
+            (git_profile_record.ssh.registration | default({})).provider
+            | default('manual')
+          )
+          == 'github'
+
+    - name: Read managed SSH key timestamps
+      ansible.builtin.stat:
+        path: "{{ dev_home }}/.ssh/git-profile-{{ item.id }}"
+      loop: "{{ git_profiles_ssh_profiles }}"
+      loop_control:
+        label: "{{ item.id }}"
+      register: git_profiles_key_stats
+
+    - name: Report SSH keys due for rotation
+      ansible.builtin.debug:
+        msg: >-
+          SSH key {{ item.item.id }} is at least
+          {{
+            item.item.ssh.rotation_reminder_days
+            | default(git_ssh_rotation_reminder_days)
+          }}
+          days old. GitHub SSH keys do not expire automatically; rotate this
+          key explicitly after confirming the replacement path.
+      loop: "{{ git_profiles_key_stats.results }}"
+      loop_control:
+        label: "{{ item.item.id }}"
+      when:
+        - item.stat.exists
+        - >-
+          (
+            (
+              ansible_facts['date_time']['epoch'] | int
+              - item.stat.mtime | int
+            )
+            / 86400
+          ) | int
+          >=
+          (
+            item.item.ssh.rotation_reminder_days
+            | default(git_ssh_rotation_reminder_days)
+            | int
+          )

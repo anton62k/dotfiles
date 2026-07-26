@@ -1,0 +1,147 @@
+---
+- name: Install base development packages
+  ansible.builtin.apt:
+    name:
+      - build-essential
+      - ca-certificates
+      - curl
+      - fzf
+      - git
+      - git-delta
+      - gnupg
+      - jq
+      - mosh
+      - python3
+      - python3-debian
+      - ripgrep
+      - tmux
+      - tmuxinator
+      - unzip
+      - xz-utils
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create the APT keyring directory
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install the GitHub CLI repository key
+  ansible.builtin.get_url:
+    url: https://cli.github.com/packages/githubcli-archive-keyring.gpg
+    dest: /etc/apt/keyrings/githubcli-archive-keyring.gpg
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Remove the legacy GitHub CLI repository definition
+  ansible.builtin.file:
+    path: /etc/apt/sources.list.d/github-cli.list
+    state: absent
+
+- name: Configure the GitHub CLI repository
+  ansible.builtin.deb822_repository:
+    name: github-cli
+    types:
+      - deb
+    uris: https://cli.github.com/packages
+    suites:
+      - stable
+    components:
+      - main
+    signed_by: /etc/apt/keyrings/githubcli-archive-keyring.gpg
+    state: present
+
+- name: Install GitHub CLI
+  ansible.builtin.apt:
+    name: gh
+    state: present
+    update_cache: true
+
+- name: Select release architecture names
+  ansible.builtin.set_fact:
+    common_neovim_release_arch: "{{ {'x86_64': 'x86_64', 'aarch64': 'arm64'}[ansible_facts['architecture']] }}"
+    common_lazygit_release_arch: "{{ {'x86_64': 'x86_64', 'aarch64': 'arm64'}[ansible_facts['architecture']] }}"
+
+- name: Create the pinned Neovim installation directory
+  ansible.builtin.file:
+    path: "/opt/nvim-{{ neovim_version }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Download the pinned Neovim release
+  ansible.builtin.get_url:
+    url: >-
+      https://github.com/neovim/neovim/releases/download/v{{ neovim_version
+      }}/nvim-linux-{{ common_neovim_release_arch }}.tar.gz
+    dest: "/var/cache/nvim-linux-{{ common_neovim_release_arch }}.tar.gz"
+    checksum: "sha256:{{ neovim_checksums[ansible_facts['architecture']] }}"
+    mode: "0644"
+
+- name: Extract the pinned Neovim release
+  ansible.builtin.unarchive:
+    src: "/var/cache/nvim-linux-{{ common_neovim_release_arch }}.tar.gz"
+    dest: "/opt/nvim-{{ neovim_version }}"
+    remote_src: true
+    extra_opts:
+      - --strip-components=1
+    creates: "/opt/nvim-{{ neovim_version }}/bin/nvim"
+
+- name: Select the pinned Neovim release
+  ansible.builtin.file:
+    src: "/opt/nvim-{{ neovim_version }}/bin/nvim"
+    dest: /usr/local/bin/nvim
+    state: link
+    force: true
+
+- name: Create the pinned lazygit installation directory
+  ansible.builtin.file:
+    path: "/opt/lazygit-{{ lazygit_version }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Download the pinned lazygit release
+  ansible.builtin.get_url:
+    url: >-
+      https://github.com/jesseduffield/lazygit/releases/download/v{{
+      lazygit_version }}/lazygit_{{ lazygit_version }}_linux_{{
+      common_lazygit_release_arch }}.tar.gz
+    dest: >-
+      /var/cache/lazygit_{{ lazygit_version }}_linux_{{
+      common_lazygit_release_arch }}.tar.gz
+    checksum: "sha256:{{ lazygit_checksums[ansible_facts['architecture']] }}"
+    mode: "0644"
+
+- name: Extract the pinned lazygit binary
+  ansible.builtin.unarchive:
+    src: >-
+      /var/cache/lazygit_{{ lazygit_version }}_linux_{{
+      common_lazygit_release_arch }}.tar.gz
+    dest: "/opt/lazygit-{{ lazygit_version }}"
+    remote_src: true
+    include:
+      - lazygit
+    creates: "/opt/lazygit-{{ lazygit_version }}/lazygit"
+
+- name: Select the pinned lazygit release
+  ansible.builtin.file:
+    src: "/opt/lazygit-{{ lazygit_version }}/lazygit"
+    dest: /usr/local/bin/lazygit
+    state: link
+    force: true
+
+- name: Create the projects directory
+  ansible.builtin.file:
+    path: "{{ dev_home }}/projects"
+    state: directory
+    owner: "{{ dev_user }}"
+    group: "{{ dev_user }}"
+    mode: "0755"

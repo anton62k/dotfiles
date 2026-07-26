@@ -1,0 +1,154 @@
+---
+- name: Install access and security packages
+  ansible.builtin.apt:
+    name:
+      - openssh-server
+      - sudo
+      - ufw
+      - unattended-upgrades
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create the development user
+  ansible.builtin.user:
+    name: "{{ dev_user }}"
+    home: "{{ dev_home }}"
+    shell: "{{ dev_user_shell }}"
+    groups: sudo
+    append: true
+    create_home: true
+
+- name: Install the development user's SSH public key
+  ansible.posix.authorized_key:
+    user: "{{ dev_user }}"
+    key: "{{ bootstrap_public_key_content }}"
+    state: present
+    exclusive: false
+
+- name: Configure explicitly enabled passwordless sudo
+  ansible.builtin.copy:
+    dest: "/etc/sudoers.d/90-{{ dev_user }}"
+    content: "{{ dev_user }} ALL=(ALL:ALL) NOPASSWD: ALL\n"
+    owner: root
+    group: root
+    mode: "0440"
+    validate: /usr/sbin/visudo -cf %s
+  when: dev_passwordless_sudo | bool
+
+- name: Remove passwordless sudo when it is not enabled
+  ansible.builtin.file:
+    path: "/etc/sudoers.d/90-{{ dev_user }}"
+    state: absent
+  when: not dev_passwordless_sudo | bool
+
+- name: Enable unattended package upgrades
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Enable the unattended-upgrades service
+  ansible.builtin.service:
+    name: unattended-upgrades
+    enabled: true
+    state: started
+
+- name: Record the current SSH connection port
+  ansible.builtin.set_fact:
+    bootstrap_connection_ssh_port: "{{ ansible_port | default(22) }}"
+
+- name: Deny incoming traffic by default
+  community.general.ufw:
+    direction: incoming
+    policy: deny
+
+- name: Allow outgoing traffic by default
+  community.general.ufw:
+    direction: outgoing
+    policy: allow
+
+- name: Preserve the current SSH port during migration
+  community.general.ufw:
+    rule: limit
+    port: "{{ bootstrap_connection_ssh_port }}"
+    proto: tcp
+    comment: Temporary SSH migration
+  when: (bootstrap_connection_ssh_port | int) != (ssh_port | int)
+
+- name: Rate-limit the configured SSH port
+  community.general.ufw:
+    rule: limit
+    port: "{{ ssh_port }}"
+    proto: tcp
+    comment: SSH
+
+- name: Allow the configured Mosh port range
+  community.general.ufw:
+    rule: allow
+    port: "{{ mosh_port_range }}"
+    proto: udp
+    comment: Mosh
+  when: mosh_enabled | bool
+
+- name: Allow optional provider monitoring sources
+  community.general.ufw:
+    rule: allow
+    from_ip: "{{ item.from_ip }}"
+    port: "{{ item.port }}"
+    proto: "{{ item.proto | default('tcp') }}"
+    comment: "{{ item.comment | default('Monitoring') }}"
+  loop: "{{ monitoring_rules }}"
+  no_log: true
+
+- name: Install SSH hardening after user access is ready
+  ansible.builtin.template:
+    src: sshd-hardening.conf.j2
+    dest: /etc/ssh/sshd_config.d/99-dev-server-hardening.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Validate SSH
+    - Reload SSH
+
+- name: Apply and validate SSH hardening before enabling the firewall
+  ansible.builtin.meta: flush_handlers
+
+- name: Verify the configured SSH port from the controller
+  ansible.builtin.wait_for:
+    host: "{{ ansible_host | default(inventory_hostname) }}"
+    port: "{{ ssh_port }}"
+    connect_timeout: 5
+    timeout: 30
+  delegate_to: localhost
+  become: false
+  when: not ansible_check_mode
+
+- name: Use the configured SSH port for subsequent connections
+  ansible.builtin.add_host:
+    name: "{{ inventory_hostname }}"
+    ansible_port: "{{ ssh_port }}"
+  changed_when: false
+  when:
+    - not ansible_check_mode
+    - (bootstrap_connection_ssh_port | int) != (ssh_port | int)
+
+- name: Enable the firewall
+  community.general.ufw:
+    state: enabled
+
+- name: Remove the temporary previous SSH port
+  community.general.ufw:
+    rule: limit
+    port: "{{ bootstrap_connection_ssh_port }}"
+    proto: tcp
+    comment: Temporary SSH migration
+    delete: true
+  when:
+    - not ansible_check_mode
+    - (bootstrap_connection_ssh_port | int) != (ssh_port | int)

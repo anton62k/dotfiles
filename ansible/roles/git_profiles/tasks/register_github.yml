@@ -1,0 +1,151 @@
+---
+- name: Resolve the expected GitHub account
+  ansible.builtin.set_fact:
+    git_profiles_github_expected_login: >-
+      {{
+        lookup(
+          'ansible.builtin.env',
+          git_profile_record.ssh.registration.account_env,
+          default=''
+        )
+      }}
+
+- name: Require a controller-side GitHub account binding
+  ansible.builtin.assert:
+    that:
+      - git_profiles_github_expected_login | length > 0
+    fail_msg: >-
+      Set {{ git_profile_record.ssh.registration.account_env }} in the
+      controller .env file.
+
+- name: Read the GitHub token from the controller credential store
+  ansible.builtin.command:
+    argv:
+      - gh
+      - auth
+      - token
+      - --hostname
+      - "{{ git_profile_record.ssh.registration.hostname }}"
+      - --user
+      - "{{ git_profiles_github_expected_login }}"
+  delegate_to: localhost
+  become: false
+  register: git_profiles_github_token
+  check_mode: false
+  changed_when: false
+  no_log: true
+
+- name: Read the account authenticated by the GitHub token
+  ansible.builtin.uri:
+    url: "{{ git_profile_record.ssh.registration.api_url }}/user"
+    method: GET
+    headers:
+      Accept: application/vnd.github+json
+      Authorization: "Bearer {{ git_profiles_github_token.stdout }}"
+      X-GitHub-Api-Version: >-
+        {{ git_profile_record.ssh.registration.api_version | default('2026-03-10') }}
+    return_content: true
+    status_code: 200
+  delegate_to: localhost
+  become: false
+  register: git_profiles_github_account
+  check_mode: false
+  changed_when: false
+  no_log: true
+
+- name: Verify the GitHub account binding
+  ansible.builtin.assert:
+    that:
+      - >-
+        git_profiles_github_account.json.login
+        == git_profiles_github_expected_login
+    fail_msg: >-
+      The controller token selected for profile {{ git_profile_record.id }}
+      belongs to a different GitHub account.
+  no_log: true
+
+- name: List existing GitHub SSH keys
+  ansible.builtin.uri:
+    url: "{{ git_profile_record.ssh.registration.api_url }}/user/keys?per_page=100"
+    method: GET
+    headers:
+      Accept: application/vnd.github+json
+      Authorization: "Bearer {{ git_profiles_github_token.stdout }}"
+      X-GitHub-Api-Version: >-
+        {{ git_profile_record.ssh.registration.api_version | default('2026-03-10') }}
+    return_content: true
+    status_code: 200
+  delegate_to: localhost
+  become: false
+  register: git_profiles_github_keys
+  check_mode: false
+  changed_when: false
+  no_log: true
+
+- name: Refuse an incomplete GitHub key inventory
+  ansible.builtin.assert:
+    that:
+      - >-
+        'rel="next"'
+        not in (git_profiles_github_keys.link | default(''))
+    fail_msg: >-
+      The GitHub account has more than 100 SSH keys. Pagination must be
+      handled before this playbook can safely register another key.
+
+- name: Normalize GitHub SSH key material
+  ansible.builtin.set_fact:
+    git_profiles_current_key_material: "{{ git_profile_record.key_material }}"
+    git_profiles_github_existing_key_materials: >-
+      {{
+        git_profiles_github_keys.json
+        | map(attribute='key')
+        | map('trim')
+        | list
+      }}
+    git_profiles_github_title_key_materials: >-
+      {{
+        git_profiles_github_keys.json
+        | selectattr('title', 'equalto', git_profile_record.key_title)
+        | map(attribute='key')
+        | map('trim')
+        | list
+      }}
+
+- name: Refuse an implicit GitHub SSH key rotation
+  ansible.builtin.assert:
+    that:
+      - >-
+        (git_profiles_github_title_key_materials | length == 0)
+        or
+        (
+          git_profiles_current_key_material
+          in git_profiles_github_title_key_materials
+        )
+    fail_msg: >-
+      GitHub already has a different key titled
+      {{ git_profile_record.key_title }}. Rotate it explicitly instead of
+      replacing access during a normal bootstrap.
+
+- name: Register the GitHub SSH key
+  ansible.builtin.uri:
+    url: "{{ git_profile_record.ssh.registration.api_url }}/user/keys"
+    method: POST
+    headers:
+      Accept: application/vnd.github+json
+      Authorization: "Bearer {{ git_profiles_github_token.stdout }}"
+      X-GitHub-Api-Version: >-
+        {{ git_profile_record.ssh.registration.api_version | default('2026-03-10') }}
+    body_format: json
+    body:
+      title: "{{ git_profile_record.key_title }}"
+      key: "{{ git_profile_record.public_key }}"
+    return_content: true
+    status_code: 201
+  delegate_to: localhost
+  become: false
+  when: >-
+    git_profiles_current_key_material
+    not in git_profiles_github_existing_key_materials
+  register: git_profiles_github_key_registration
+  changed_when: true
+  no_log: true

@@ -1,0 +1,75 @@
+---
+- name: Bootstrap access and secure a new Ubuntu server
+  hosts: dev_servers
+  become: true
+  gather_facts: true
+
+  pre_tasks:
+    - name: Require an Ubuntu host
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['distribution'] == 'Ubuntu'
+          - dev_user is defined
+          - (dev_user | default('root')) != 'root'
+        fail_msg: This bootstrap currently supports Ubuntu and a non-root development user.
+
+    - name: Check the public key on the controller
+      ansible.builtin.stat:
+        path: "{{ dev_user_public_key_file }}"
+      delegate_to: localhost
+      become: false
+      register: dev_public_key
+
+    - name: Require a readable SSH public key
+      ansible.builtin.assert:
+        that:
+          - dev_public_key.stat.exists
+          - dev_public_key.stat.isreg
+        fail_msg: "Set dev_user_public_key_file in the ignored inventory.yml. Never use a private key here."
+
+    - name: Read the SSH public key from the controller
+      ansible.builtin.slurp:
+        src: "{{ dev_user_public_key_file }}"
+      delegate_to: localhost
+      become: false
+      register: bootstrap_public_key_source
+      no_log: true
+
+    - name: Select the validated SSH public key
+      ansible.builtin.set_fact:
+        bootstrap_public_key_content: >-
+          {{ bootstrap_public_key_source.content | b64decode | trim }}
+      no_log: true
+
+    - name: Require a valid OpenSSH public key
+      ansible.builtin.assert:
+        that:
+          - bootstrap_public_key_content | length > 0
+          - "'PRIVATE KEY' not in bootstrap_public_key_content"
+          - >-
+            bootstrap_public_key_content
+            is match(
+              '^(ssh-(ed25519|rsa)|ecdsa-sha2-nistp(256|384|521)|'
+              ~ 'sk-(ssh-ed25519|ecdsa-sha2-nistp256)@openssh\.com)'
+              ~ ' [A-Za-z0-9+/]+={0,3}( .*)?$'
+            )
+        fail_msg: >-
+          dev_user_public_key_file must contain one valid OpenSSH public key,
+          never private key material.
+      no_log: true
+
+    - name: Parse the SSH public key with ssh-keygen
+      ansible.builtin.command:
+        argv:
+          - ssh-keygen
+          - -l
+          - -f
+          - "{{ dev_user_public_key_file }}"
+      delegate_to: localhost
+      become: false
+      check_mode: false
+      changed_when: false
+      no_log: true
+
+  roles:
+    - bootstrap
