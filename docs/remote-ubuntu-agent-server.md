@@ -173,3 +173,51 @@ gh --version
 moshi-hook status
 systemctl --user status moshi-hook.service --no-pager
 ```
+
+## Local Herdr shortcuts
+
+Hide server addresses and usernames behind SSH aliases in the local
+`~/.ssh/config`:
+
+```sshconfig
+Host agents-user-a
+    HostName server.example.com
+    User user-a
+    IdentityFile ~/.ssh/id_ed25519
+    IdentitiesOnly yes
+
+Host agents-user-b
+    HostName server.example.com
+    User user-b
+    IdentityFile ~/.ssh/id_ed25519
+    IdentitiesOnly yes
+```
+
+Then add a short zsh function with completion to `~/.zshrc`:
+
+```zsh
+h() {
+  case "$1" in
+    user-a) herdr --remote agents-user-a --remote-keybindings server ;;
+    user-b) herdr --remote agents-user-b --remote-keybindings server ;;
+    *) echo "usage: h user-a|user-b" >&2; return 2 ;;
+  esac
+}
+
+_h() {
+  _describe 'account' '( user-a user-b )'
+}
+
+compdef _h h
+```
+
+Reload the shell and connect with:
+
+```bash
+source ~/.zshrc
+h user-a
+h user-b
+```
+
+An old host can be retained as a separate SSH alias, for example
+`old-user-a`, without changing the shortcuts for the current server.
