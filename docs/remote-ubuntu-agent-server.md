@@ -43,12 +43,12 @@ curl -fsSL https://herdr.dev/install.sh | sh
 # user-local Moshi hook and agent integrations
 MOSHI_HOOK_SKIP_FIRST_RUN=1 sh -c 'curl -fsSL https://getmoshi.app/install.sh | sh'
 moshi-hook install
-moshi-hook service install
 ```
 
-The `.nvmrc` shell hook may be added to shell startup so entering a project
-directory automatically selects its declared Node version. Agent
-authentication remains interactive and user-specific:
+The `.nvmrc` file declares the Node.js version for `nvm use` or `nvm install`.
+Automatic selection when entering a directory requires the shell hook; without
+that hook, run `nvm use` or `nvm install` explicitly. Agent authentication
+remains interactive and user-specific:
 
 ```bash
 gh auth login
@@ -61,26 +61,26 @@ Do not copy tokens between users or store them in dotfiles.
 
 ## Moshi host setup
 
-Easy Pair запускается на самом сервере под нужной учёткой:
+Run Easy Pair on the server as the user that will own the connection:
 
 ```bash
 moshi-hook host setup
 ```
 
-Команда проверяет SSH, `mosh-server` и multiplexer, затем предлагает выбрать
-тип адреса. Выбери `IP`, введи публичный IP сервера и дождись временного
-QR-кода. Отсканируй его в приложении Moshi.
+The command checks SSH, `mosh-server`, and the multiplexer, then asks for the
+address type. Select `IP`, enter the server's public IP, and wait for the
+temporary QR code. Scan it in the Moshi app.
 
-Пример интерактивного шага:
+Example interactive step:
 
 ```text
 Address type: IP
 Server IP:    <PUBLIC_SERVER_IP>
 ```
 
-Hostname можно выбрать вместо IP, если у сервера есть доступное DNS-имя.
+Choose `Hostname` instead when the server has a reachable DNS name.
 
-Если подключение добавляется вручную в Moshi, поля выглядят так:
+For a manual Moshi connection, use fields like these:
 
 ```text
 Name:            user-a
@@ -91,8 +91,8 @@ Authentication: SSH key
 Connection type: Auto
 ```
 
-Для второй учётки создаётся отдельное подключение с тем же `Host` и `Port`, но
-с другим `Name` и `Username`:
+Create a second connection with the same `Host` and `Port`, but a different
+`Name` and `Username`:
 
 ```text
 Name:            user-b
@@ -103,8 +103,8 @@ Authentication: SSH key
 Connection type: Auto
 ```
 
-`Host` и SSH `Port` не являются gateway-портом `moshi-hook`. Gateway остаётся
-локальным и проксируется через SSH.
+`Host` and SSH `Port` are not the `moshi-hook` gateway port. The gateway stays
+local and is proxied through SSH.
 
 ## Two users on one host
 
@@ -118,8 +118,14 @@ user-b@server.example.com
 Their home directories, NVM installations, agent configs, Herdr sessions,
 Moshi hooks, Unix sockets, and systemd user services remain separate.
 
-Moshi normally uses gateway `127.0.0.1:24543`. When two user daemons run on one
-host, give the second daemon another loopback port with a systemd drop-in:
+Install the standard service for the first user:
+
+```bash
+moshi-hook service install
+```
+
+Moshi normally uses gateway `127.0.0.1:24543`. Before starting the second
+user's service, give it another loopback port with a systemd drop-in:
 
 ```ini
 # ~/.config/systemd/user/moshi-hook.service.d/override.conf
@@ -128,11 +134,11 @@ ExecStart=
 ExecStart=%h/.local/bin/moshi-hook serve --gateway-listen 127.0.0.1:24544
 ```
 
-Apply it as the second user:
+Apply the drop-in as the second user, before the first service start:
 
 ```bash
 systemctl --user daemon-reload
-systemctl --user enable --now moshi-hook.service
+moshi-hook service install
 ```
 
 Pair each user separately from the Moshi app:
