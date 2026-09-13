@@ -59,6 +59,44 @@ opencode auth login
 
 Do not copy tokens between users or store them in dotfiles.
 
+## Moshi host setup
+
+Easy Pair запускается на самом сервере под нужной учёткой:
+
+```bash
+moshi-hook host setup
+```
+
+Команда проверяет SSH, `mosh-server` и multiplexer, затем печатает временный
+QR-код. Hostname и IP в эту команду не передаются: отсканируй QR в приложении
+Moshi, и приложение само создаст подключение.
+
+Если подключение добавляется вручную в Moshi, поля выглядят так:
+
+```text
+Name:            user-a
+Host:            server.example.com  # или публичный IP сервера
+Port:            22
+Username:        user-a
+Authentication: SSH key
+Connection type: Auto
+```
+
+Для второй учётки создаётся отдельное подключение с тем же `Host` и `Port`, но
+с другим `Name` и `Username`:
+
+```text
+Name:            user-b
+Host:            server.example.com
+Port:            22
+Username:        user-b
+Authentication: SSH key
+Connection type: Auto
+```
+
+`Host` и SSH `Port` не являются gateway-портом `moshi-hook`. Gateway остаётся
+локальным и проксируется через SSH.
+
 ## Two users on one host
 
 Use separate SSH destinations even when both accounts use the same public key:
