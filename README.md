@@ -133,6 +133,12 @@ cd ~/projects/dotfiles
 
 The script installs all dependencies and copies config files. Some steps require manual action — the script will print instructions at the end.
 
+## Remote Ubuntu agent server
+
+See [Remote Ubuntu agent server](docs/remote-ubuntu-agent-server.md) for the
+anonymous two-user server setup, per-user agent installation, Docker Sandboxes,
+Mosh, and Moshi hooks.
+
 ### Manual installation
 
 #### 1. Install dependencies
